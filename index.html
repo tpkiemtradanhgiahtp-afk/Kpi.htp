@@ -40,6 +40,7 @@ body{font-family:'Be Vietnam Pro',sans-serif;background:var(--bg);color:var(--t1
 .app{display:none;min-height:100vh}.app.on{display:flex}
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:#F1F5F9}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}
 
+
 .sb{width:300px;background:linear-gradient(180deg,#1E3A5F 0%,#1E40AF 100%);border-right:none;display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;overflow-y:auto}
 .sb-h{padding:18px 20px;border-bottom:1px solid rgba(255,255,255,.15)}.sb-h .br{display:flex;align-items:center;gap:10px}
 .sb-h .bi{width:40px;height:40px;background:linear-gradient(135deg,var(--ac),var(--purple));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;flex-shrink:0}
@@ -2788,7 +2789,8 @@ function _llvWeeks(cmStr){
     for(var i=0;i<7;i++){
       var d=new Date(cur);
       var inMonth=d.getMonth()===(M-1);
-      days.push({dateObj:d,day:inMonth?d.getDate():null,dow:d.getDay(),inMonth:inMonth,iso:d.toISOString().slice(0,10)});
+      var localIso=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      days.push({dateObj:d,day:inMonth?d.getDate():null,dow:d.getDay(),inMonth:inMonth,iso:localIso});
       cur.setDate(cur.getDate()+1);
     }
     if(days.some(function(d){return d.inMonth;}))weeks.push({weekNum:wn,days:days});
@@ -2843,7 +2845,7 @@ function rLichLamViec(c){
   });
 
   var DOW_VN=['CN','T2','T3','T4','T5','T6','T7'];
-  var todayIso=new Date().toISOString().slice(0,10);
+  var _tn=new Date();var todayIso=_tn.getFullYear()+'-'+String(_tn.getMonth()+1).padStart(2,'0')+'-'+String(_tn.getDate()).padStart(2,'0');
 
   var weekTabs=weeks.map(function(w){
     var wStart=w.days.find(function(d){return d.inMonth;});
@@ -2976,7 +2978,7 @@ function rLichLamViec(c){
 function _llvOpenForm(dateIso,sessionId){
   if(!canGiaoBan()){toast('Bạn không có quyền thêm lịch','ng');return;}
   var allMems=D.members.filter(function(m){return m.username;});
-  var today=new Date().toISOString().slice(0,10);
+  var _td=new Date();var today=_td.getFullYear()+'-'+String(_td.getMonth()+1).padStart(2,'0')+'-'+String(_td.getDate()).padStart(2,'0');
   document.getElementById('MT').textContent='Thêm lịch làm việc';
   document.getElementById('MB').innerHTML=
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
@@ -8572,7 +8574,11 @@ function taskCheckDeadlines() {
       const unitKpi = monthKpi[u.id] || {};
       // Shared KPI
       (unitKpi.shared || []).forEach(k => {
-        if(k.deadline) {
+        // Bỏ qua nếu đã có điểm kết quả hoặc tất cả thành viên đã xác nhận
+        const sharedDone = (k.result !== undefined && k.result !== null && k.result !== '')
+          || (k.members && Object.keys(k.members).length > 0
+              && Object.values(k.members).every(md => md.confirmed));
+        if(k.deadline && !sharedDone) {
           const dl = new Date(k.deadline); dl.setHours(0,0,0,0);
           const daysLeft = Math.round((dl - todayTs) / 86400000);
           if(daysLeft <= 60) items.push({
@@ -8589,7 +8595,9 @@ function taskCheckDeadlines() {
         const personal = (unitKpi.personal || {})[m.id];
         if(!Array.isArray(personal)) return;
         personal.forEach(k => {
-          if(k.deadline) {
+          // Bỏ qua nếu đã xác nhận hoàn thành hoặc đã chấm điểm
+          const kpiDone = k.confirmed || (k.result !== undefined && k.result !== null && k.result !== '');
+          if(k.deadline && !kpiDone) {
             const dl = new Date(k.deadline); dl.setHours(0,0,0,0);
             const daysLeft = Math.round((dl - todayTs) / 86400000);
             if(daysLeft <= 60) items.push({
@@ -8599,6 +8607,21 @@ function taskCheckDeadlines() {
             });
           }
         });
+        // Công việc cá nhân (tasks) — đồng bộ vào nhắc việc, bỏ qua đã hoàn thành
+        const taskList = (unitKpi.tasks || {})[m.id];
+        if(Array.isArray(taskList)) {
+          taskList.forEach((t, ti) => {
+            if(t.deadline && !t.done) {
+              const dl = new Date(t.deadline); dl.setHours(0,0,0,0);
+              const daysLeft = Math.round((dl - todayTs) / 86400000);
+              if(daysLeft <= 60) items.push({
+                id:'cvpersonal_'+month+'_'+u.id+'_'+m.id+'_'+ti+'_'+(t.name||''), title: t.name||'Công việc',
+                deadline: t.deadline, unitName: u.name, daysLeft, type:'CV cá nhân',
+                month, assignee: m.name
+              });
+            }
+          });
+        }
       });
     });
   });
@@ -9968,7 +9991,7 @@ function openInspectionForm(idx){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
 
       <div class="fg"><label>Ngày kiểm tra</label>
-        <input type="date" id="kt_date" value="${d.date||new Date().toISOString().slice(0,10)}"></div>
+        <input type="date" id="kt_date" value="${d.date||(function(){var _d=new Date();return _d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');})()}"></div>
       <div class="fg"><label>Loại kiểm tra</label>
         <select id="kt_type">
           <option value="">-- Chọn --</option>
@@ -12966,7 +12989,7 @@ function openCCDCMaintainForm(eid){
         '<option value="kiem_tra"'+(it&&it.type==='kiem_tra'?' selected':'')+'>🔍 Kiểm tra định kỳ</option>'+
       '</select></div>'+
     '<div class="fg"><label>Ngày thực hiện</label>'+
-      '<input type="date" id="maintainDate" value="'+(it?it.date:new Date().toISOString().slice(0,10))+'"></div>'+
+      '<input type="date" id="maintainDate" value="'+(it?it.date:(function(){var _d=new Date();return _d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');})())+'"></div>'+
     '<div class="fg" style="grid-column:1/-1"><label>Thời gian bảo trì / Sửa chữa <span style="color:var(--ng)">*</span> <small style="font-weight:400;text-transform:none;font-size:11px">(VD: 8h00 - 10h30 ngày 07/04/2026, 3 ngày từ 05-07/04...)</small></label>'+
       '<input type="text" id="maintainTimeDetail" value="'+(it?it.timeDetail||'':'')+'" placeholder="Mô tả thời gian thực hiện bảo trì..."></div>'+
     '<div class="fg" style="grid-column:1/-1"><label>Nội dung bảo trì / Sửa chữa <span style="color:var(--ng)">*</span></label>'+
@@ -13026,7 +13049,7 @@ function saveCCDCMaintain(eid){
   var obj={
     itemId:itemId,
     type:(document.getElementById('maintainType')||{}).value||'bao_tri',
-    date:(document.getElementById('maintainDate')||{}).value||new Date().toISOString().slice(0,10),
+    date:(document.getElementById('maintainDate')||{}).value||(function(){var _d=new Date();return _d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');})(),
     timeDetail:timeDetail.trim(),
     content:content.trim(),
     vendor:((document.getElementById('maintainVendor')||{}).value||'').trim(),
@@ -13091,7 +13114,7 @@ function exportCCDCMaintainToExcel(){
     var ws=XLSX.utils.aoa_to_sheet(data);
     ws['!cols']=[{wch:5},{wch:25},{wch:12},{wch:18},{wch:12},{wch:30},{wch:40},{wch:25},{wch:16},{wch:18},{wch:20},{wch:25}];
     XLSX.utils.book_append_sheet(wb,ws,'Bao tri CCDC');
-    XLSX.writeFile(wb,'BaoTri_CCDC_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    XLSX.writeFile(wb,'BaoTri_CCDC_'+(function(){var _d=new Date();return _d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');})()+'.xlsx');
     toast('Xuất Excel thành công','ok');
   } catch(e){toast('Lỗi xuất Excel: '+e.message,'ng');}
 }
@@ -13108,7 +13131,7 @@ function openCCDCAllocForm(eid){
   document.getElementById('MB').innerHTML=
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
     '<div class="fg"><label>Loại <span style="color:var(--ng)">*</span></label><select id="ccdcAllocFormType"><option value="cap_phat"'+(it&&it.type==='cap_phat'?' selected':'')+'>Cấp phát</option><option value="thu_hoi"'+(it&&it.type==='thu_hoi'?' selected':'')+'>Thu hồi</option></select></div>'+
-    '<div class="fg"><label>Ngày</label><input type="date" id="ccdcAllocDate" value="'+(it?it.date:new Date().toISOString().slice(0,10))+'" class="fg"></div>'+
+    '<div class="fg"><label>Ngày</label><input type="date" id="ccdcAllocDate" value="'+(it?it.date:(function(){var _d=new Date();return _d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');})())+'" class="fg"></div>'+
     '<div class="fg" style="grid-column:1/-1"><label>CCDC <span style="color:var(--ng)">*</span></label><select id="ccdcAllocItem"><option value="">-- Chọn CCDC --</option>'+itemOpts+'</select></div>'+
     '<div class="fg"><label>Số lượng</label><input type="number" id="ccdcAllocQty" value="'+(it?it.qty||1:1)+'" min="1" class="fg"></div>'+
     '<div class="fg"><label>Đơn vị</label><select id="ccdcAllocUnit">'+units.map(function(u){return '<option value="'+u.id+'"'+(it&&it.unitId===u.id?' selected':'')+'>'+u.name+'</option>';}).join('')+'</select></div>'+
@@ -13128,7 +13151,7 @@ function saveCCDCAlloc(eid){
   var cd=getCCDCData();
   var obj={
     type:(document.getElementById('ccdcAllocFormType')||{}).value||'cap_phat',
-    date:(document.getElementById('ccdcAllocDate')||{}).value||new Date().toISOString().slice(0,10),
+    date:(document.getElementById('ccdcAllocDate')||{}).value||(function(){var _d=new Date();return _d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');})(),
     itemId:itemId,
     qty:Number((document.getElementById('ccdcAllocQty')||{}).value||1),
     unitId:(document.getElementById('ccdcAllocUnit')||{}).value||'',
@@ -13157,7 +13180,7 @@ function saveCCDCAlloc(eid){
       el=document.getElementById('ccdcAllocReceiver'); if(el) el.value='';
       el=document.getElementById('ccdcAllocNote'); if(el) el.value='';
       // Reset ngày về hôm nay
-      el=document.getElementById('ccdcAllocDate'); if(el) el.value=new Date().toISOString().slice(0,10);
+      el=document.getElementById('ccdcAllocDate'); if(el) el.value=(function(){var _d=new Date();return _d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');})();
       var mt=document.getElementById('MT'); if(mt) mt.textContent='Ghi phiếu Cấp phát / Thu hồi';
       var mb=document.getElementById('MB'); if(mb) mb.scrollTop=0;
     });
